@@ -20,9 +20,7 @@ module Data.Lenses.Template (
 import Language.Haskell.TH.Syntax
   -- (Q, Exp(VarE), Pat(VarP), Dec(ValD), Name(Name), mkOccName, occString, reify, )
 
-import Data.List.HT (viewR, )
 import Data.Maybe (catMaybes, )
---import Control.Monad (liftM, when, )
 import Control.Monad.State
 import Data.Lenses
 
@@ -63,6 +61,11 @@ stripUnderscore :: String -> Maybe String
 stripUnderscore s = do
     (stem,'_') <- viewR s
     return stem
+  where
+    -- add to break dependency with Data.List.HT
+    viewR :: [a] -> Maybe ([a], a)
+    viewR [] = Nothing
+    viewR xs = Just (init xs, last xs)
 
 
 -- |@nameDeriveLenses n f@ where @n@ is the name of a data type

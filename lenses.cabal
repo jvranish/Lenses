@@ -1,0 +1,23 @@
+Name:                lenses
+Version:             0.1.0
+Author:              Job Vranish
+Maintainer:          jvranish@gmail.com
+License:             BSD3
+License-file:        LICENSE
+category:            Data
+Synopsis:            Simple Functional Lenses
+Description:         A simple but powerful implementation of function lenses (aka functional
+                     references, accessors, etc..).
+                     They allow an easy way to manipulate fields of records
+
+Build-Type:          Simple
+Cabal-Version:       >= 1.2.0
+
+library
+    exposed-modules: Data.Lenses,
+                     Data.Lenses.Template
+    build-depends:	base >= 4 && < 5,
+                    mtl >= 1.1 && < 2
+    hs-source-dirs: src/
+    ghc-options:	-O2 -Wall
+

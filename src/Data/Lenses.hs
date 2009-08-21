@@ -9,7 +9,6 @@ module Data.Lenses ( fetchFrom, fetchFromT
                    , updateIn, updateInT
                    , fetch, update, alter
                    , getAndModify, modifyAndGet
-                   , runLense, runLenseT
                    , fromGetSet, with
                    , runSTLense, injectState
                    , to, from
@@ -23,6 +22,14 @@ import Control.Monad.State hiding (sequence, mapM)
 import Control.Monad.Identity hiding (sequence, mapM)
 
 import Prelude hiding (sequence, mapM)
+
+
+fromGetSet :: (MonadState r m) => (r -> a) -> (a -> r -> r) -> StateT a m b -> m b
+fromGetSet getter setter m = do
+  s <- get
+  (a, newFieldValue) <- runStateT m $ getter s
+  put $ setter newFieldValue s
+  return a
 
 
 fetchFrom :: StateT b Identity a -> b -> a
@@ -57,17 +64,6 @@ getAndModify f = do
 modifyAndGet :: (MonadState s m) => (s -> s) -> m s 
 modifyAndGet f = modify f >> get
 
-runLense :: State s a -> s -> (a, s)
-runLense = runState
-runLenseT :: StateT s m a -> s -> m (a, s)
-runLenseT = runStateT
-
-fromGetSet :: (MonadState r m) => (r -> a) -> (a -> r -> r) -> StateT a m b -> m b
-fromGetSet getter setter m = do
-  s <- get
-  (a, newFieldValue) <- runStateT m $ getter s
-  put $ setter newFieldValue s
-  return a
 
 with :: a -> a
 with = id

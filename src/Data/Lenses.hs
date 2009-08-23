@@ -5,8 +5,9 @@
 
 -}
 
-module Data.Lenses ( fetchFrom, fetchFromT
-                   , updateIn, updateInT
+module Data.Lenses ( runOn, runOnT
+                   , evalFrom, evalFromT
+                   , execIn, execInT
                    , fetch, update, alter
                    , getAndModify, modifyAndGet
                    , fromGetSet, with
@@ -31,29 +32,34 @@ fromGetSet getter setter m = do
   put $ setter newFieldValue s
   return a
 
+runOn :: StateT b Identity a -> b -> (a, b)
+runOn l s = runIdentity $ runOnT l s
 
-fetchFrom :: StateT b Identity a -> b -> a
-fetchFrom l s = runIdentity $ fetchFromT l s
+runOnT :: StateT b m a -> b -> m (a, b)
+runOnT l s = runStateT l s
 
-fetchFromT :: (Monad m) => StateT b m a -> b -> m a
-fetchFromT l s = liftM fst $ runStateT l s
+evalFrom :: StateT b Identity a -> b -> a
+evalFrom l s = runIdentity $ evalFromT l s
 
-updateIn :: StateT a Identity a1 -> a -> a
-updateIn l s = runIdentity $ updateInT l s 
+evalFromT :: (Monad m) => StateT b m a -> b -> m a
+evalFromT l s = liftM fst $ runStateT l s
 
-updateInT :: (Monad m) => StateT b m a -> b -> m b
-updateInT l s = liftM snd $ runStateT l s
+execIn :: StateT a Identity a1 -> a -> a
+execIn l s = runIdentity $ execInT l s
+
+execInT :: (Monad m) => StateT b m a -> b -> m b
+execInT l s = liftM snd $ runStateT l s
 
 -- this could have the type :: (MonadState a m) => (m a -> StateT r Identity b) -> r -> b
 --    without causeing problems, but it might be confusing.
 fetch :: (MonadState a m) => (m a -> StateT r Identity a) -> r -> a
-fetch lense s = lense get `fetchFrom` s
+fetch lense s = lense get `evalFrom` s
 
 update :: (MonadState a m) => (m () -> StateT r Identity b) -> a -> r -> r
-update lense newValue s = lense (put newValue) `updateIn` s
+update lense newValue s = lense (put newValue) `execIn` s
 
 alter :: (MonadState a m) => (m () -> StateT r Identity b) -> (a -> a) -> r -> r
-alter lense f s = lense (modify f) `updateIn` s
+alter lense f s = lense (modify f) `execIn` s
 
 getAndModify :: (MonadState s m) => (s -> s) -> m s
 getAndModify f = do

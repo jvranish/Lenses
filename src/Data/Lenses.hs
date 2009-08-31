@@ -77,8 +77,8 @@ fetches a field from a structure using a lense:
 -}
 -- this could have the type :: (MonadState a m) => (m a -> StateT r Identity b) -> r -> b
 --    without causeing problems, but it might be confusing.
-fetch :: (MonadState a m) => r -> (m a -> StateT r Identity a) -> a
-fetch s lense = lense get `evalFrom` s
+fetch :: r -> (State a a -> State r a) -> a
+fetch s lense = lense get `evalState` s
 
 {- |
 updates a field in a structure using a lense:
@@ -89,8 +89,8 @@ updates a field in a structure using a lense:
 > -- newPoint == Point 5 15
 
 -}
-update :: (MonadState a m) => r -> (m () -> StateT r Identity b) -> a -> r
-update s lense newValue = lense (put newValue) `execIn` s
+update :: r -> (State a () -> State r b) -> a -> r
+update s lense newValue = lense (put newValue) `execState` s
 
 {- |
 alters a field in a structure using a lense and a function:
@@ -101,8 +101,8 @@ alters a field in a structure using a lense and a function:
 > -- newPoint == Point 5 4
 
 -}
-alter :: (MonadState a m) => (m () -> StateT r Identity b) -> (a -> a) -> r -> r
-alter lense f s = lense (modify f) `execIn` s
+alter :: (State a () -> State r b) -> (a -> a) -> r -> r
+alter lense f s = lense (modify f) `execState` s
 
 -- * More advanced functions that allow chaining fetching//updating actions
 

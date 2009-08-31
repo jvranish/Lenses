@@ -9,8 +9,10 @@ It was copied almost verbatim (2 line change) from the wonderful Data.Accessors.
 made by Luke Palmer, and Henning Thielemann.
 
 You will need to add:
-{-# LANGUAGE TemplateHaskell, 
-             FlexibleContexts #-}
+
+{\-# LANGUAGE  TemplateHaskell,
+ FlexibleContexts #-\}
+
 to the top of any modules that use this one. 
 -}
 module Data.Lenses.Template (

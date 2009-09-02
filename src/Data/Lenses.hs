@@ -9,6 +9,8 @@ I particularly like how cleanly it handles nested structures in state monads.
 
 A brief tutorial to get started:
 
+To create a lense, you can use fromGetSet (although usually you would just derive them using templat haskell and "Data.Lenses.Template"):
+
 > lense = fromGetSet getField setField
 
 The lense has type:

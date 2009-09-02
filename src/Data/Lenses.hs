@@ -2,11 +2,154 @@
 
 {- |
 This modules provides a convienient way to access and update the elements of a structure.
-It is very similar to 'Data.Accessors', but simpler, a bit more generic and has fewer dependencies.
+It is very similar to 'Data.Accessors', a bit more generic and has fewer dependencies.
 I particularly like how cleanly it handles nested structures in state monads.
 'runSTLense' is also a particularly useful function.
 
-I whipped out this documentation in a hurry, so if you spot any errors, or have a better way to explain something, /please/ let me know.
+
+A brief tutorial to get started:
+
+> lense = fromGetSet getField setField
+
+The lense has type:
+
+> lense :: (MonadState r m) => StateT a m b -> m b
+
+Where r is the type of the record, and a is the type of the field, (b can be any type you choose, more on that latter). Though it may help to think of it as:
+
+> lense :: State a b -> State r b
+
+Which is not entirely accurate, but emphasises how the lense works.
+You can think of it as "pass in an action that operates on the field, and you get an action that operates on the record".
+so say we pass in get (with less general type for clarity)
+
+> get :: State a a
+>
+> lense get :: State r a
+
+we get out a state monad that we can run on our record to fetch our field
+
+> fieldValue = lense get `evalState` record
+
+This module has a special function 'fetch' that does this:
+
+> fieldValue = record `fetch` lense
+
+you can also pass in put to get an action that updates the field.
+
+> put :: a -> State a ()
+>
+> lense (put someValue) :: State r ()
+
+we get out a state monad that we can run on our record to update our field
+
+> updatedRecord = lense (put someValue) `execState` record
+
+This module has a special function 'update' that does this:
+
+> updatedRecord = (record `update` lense) someValue
+
+To aid in clarity and to deal with the actual types of the lenses you should use 'execIn', 'evalFrom', and 'runOn' instead of 'execState', 'evalState', and 'runState' when working with these lenses. Also note that 'execIn', 'evalFrom', and 'runOn' have their parameters fliped.
+
+The lenses are especially convienient if you have nested structures. Lense composition is just function composition.
+
+> data Point = Point {
+>                 x_ :: Float,
+>                 y_ :: Float
+>                 }
+>    deriving (Show)
+
+$( deriveLenses ''Point )
+
+> data Triangle = Triangle {
+>                 pa_ :: Point,
+>                 pb_ :: Point,
+>                 pc_ :: Point
+>                 }
+>    deriving (Show)
+
+$( deriveLenses ''Triangle )
+
+> a_y :: (MonadState Triangle m) => StateT Float (StateT Point m) b -> m b
+> a_y = pa . y
+
+a_y is now a lense that can operate on the y coordinate of point a inside a triangle.
+We can use a_y to fetch the coordinate or update it, on whatever triangle we choose.
+
+> someTriangle = Triangle (Point 5 3) (Point 0 1) (Point 10 6)
+>
+> ayValue = someTriangle `fetch` a_y
+> -- ayValue == 3
+>
+> updatedTriangle = (someTriangle `update` a_y) 7
+> -- updatedTriangle == Triangle (Point 5 7) (Point 0 1) (Point 10 6)
+
+Or we could apply our lense to an action and pass it into 'execIn'
+
+> (someTriangle `update` a_y) 7 == execIn someTriangle (a_y (put 7))
+
+
+
+We can also chain actions together:
+
+> a_x :: (MonadState Triangle m) => StateT Float (StateT Point m) b -> m b
+> a_x = pa . x
+> c_y :: (MonadState Triangle m) => StateT Float (StateT Point m) b -> m b
+> c_y = pc . y
+>
+> updatedTriangle = execIn someTriangle $ a_y (put 7) >> a_x (put 1) >> c_y (put 9)
+> -- updatedTriangle == Triangle (Point 1 7) (Point 0 1) (Point 10 9)
+
+What if we wanted to put the value of c_y into a_x? Can do!
+
+>  updatedTriangle = execIn someTriangle $ do
+>    cy <- c_y get
+>    a_x $ put cy
+>  -- updatedTriangle == Triangle (Point 6 3) (Point 0 1) (Point 10 6)
+
+Or if the order really bugs you, you can use the '$%' operator (taken from "Data.Accessors.Basic", it really should be in a standard lib)
+
+>  updatedTriangle = execIn someTriangle $ do
+>    cy <- get $% c_y
+>    put cy $% a_x
+>  -- updatedTriangle == Triangle (Point 6 3) (Point 0 1) (Point 10 6)
+
+Or you can use the '$=' operator:
+
+>  updatedTriangle = execIn someTriangle $ do
+>    cy <- c_y get
+>    a_x $= cy
+
+Or more concisely:
+
+>  updatedTriangle = execIn someTriangle $ (c_y get >>= a_x . put)
+
+Or say we want to put the value of c_y into a_x, but want to throw an error if c_y is zero. We can do that as well!
+
+>  updatdeTriangle :: Either String Triangle
+>  updatdeTriangle = execInT someTriangle $ do
+>    cy <- c_y get
+>    when (cy == 0) $ throwError "Something bad happend"
+>    a_x $ put cy
+>  -- updatedTriangle == Right $ Triangle (Point 6 3) (Point 0 1) (Point 10 6)
+>  -- if cy had equaled 0 then we would have gotten this:
+>  -- updatedTriangle == Left "Something bad happend"
+
+Note that 'execInT' = 'flip' 'execStateT'.
+
+Yay for monad transformers!
+
+One final note: Due to the generality of the lenses you might end up accidentally running into the monomorphism restriction.
+So if get a type error like:
+    Couldn't match expected type `SomeMonad SomeStructureType'
+           against inferred type `Control.Monad.Identity.Identity SomeStructureType'
+
+and nothing appears to be wrong with your code, try turning the restriction off with -XNoMonomorphismRestriction and see if it goes away.
+If it does then you probably need to add some explicit type signatures somewhere.
+
+I whipped out this documentation in a hurry, so if you spot any errors, or think I should explain something better, /please/ let me know.
+Also since this module is new I'm open to radical modifications if you have a good suggestion, so suggest away! :)
+
 -}
 
 module Data.Lenses (
@@ -19,8 +162,8 @@ module Data.Lenses (
                    -- * Structure lenses
                    , runSTLense
                    , to, from
-                   -- * Generic state monad helper functions
-                   , getAndModify, modifyAndGet
+                   -- * Generic helper functions
+                   , getAndModify, modifyAndGet, ($=), ($%)
                    ) where
 
 import Data.Traversable
@@ -34,7 +177,7 @@ import Prelude hiding (sequence, mapM)
 
 -- * Basic functions to create lenses and use them
 {- |
-This function takes a "getter" and "setter" function and returns a function that takes a StateT Monad action and returns the monadic result of the action.
+This function takes a "getter" and "setter" function and returns our lense.
 
 Usually you only need to use this if you don't want to use Template Haskell to derive your Lenses for you.
 With a structure Point:
@@ -76,7 +219,7 @@ fetches a field from a structure using a lense:
 
 -}
 fetch :: (MonadState a m) => r -> (m a -> StateT r Identity a) -> a
-fetch s lense = lense get `evalFrom` s
+fetch s lense = evalFrom s $ lense get
 
 {- |
 updates a field in a structure using a lense:
@@ -88,7 +231,7 @@ updates a field in a structure using a lense:
 
 -}
 update :: (MonadState a m) => r -> (m () -> StateT r Identity b) -> a -> r
-update s lense newValue = lense (put newValue) `execIn` s
+update s lense newValue = execIn s $ lense (put newValue)
 
 {- |
 alters a field in a structure using a lense and a function:
@@ -100,68 +243,56 @@ alters a field in a structure using a lense and a function:
 
 -}
 alter :: (MonadState a m) => (m () -> StateT r Identity b) -> (a -> a) -> r -> r
-alter lense f s = lense (modify f) `execIn` s
+alter lense f s = execIn s $ lense (modify f)
 
 -- * More advanced functions that allow chaining fetching//updating actions
 
 {- |
 Runs a state monad action on a structure and returns the value returned from the action and the updated structure.
 
-> data Triangle = Triangle {
->                 pa_ :: Point,
->                 pb_ :: Point,
->                 pc_ :: Point
->                 }
->    deriving (Show)
-
-$( deriveLenses ''Point )
-
 > somePoint = Point 5 3
-> a = x (modifyAndGet (+1)) `runOn` somePoint
+> a = runOn somePoint $ x (modifyAndGet (+1))
 > -- a == (6, Point 6 3)
 
-But is more useful for chaining actions
-
-> someTriangle = Triangle (Point 5 3) (Point 0 1) (Point 10 6)
-> a = pc . x (modifyAndGet (+1)) `runOn` someTriangle
-> -- a == (11, Triangle (Point 5 3) (Point 0 1) (Point 11 6))
-
 -}
-runOn :: StateT b Identity a -> b -> (a, b)
-runOn l s = runIdentity $ runOnT l s
+runOn :: b -> StateT b Identity a -> (a, b)
+runOn s l = runIdentity $ runOnT s l
 
 {- |
-Monad transformer version of 'runOn'.
+Monad transformer version of 'runOn'. Note that 'runOnT' = 'runStateT'.
 
 -}
-runOnT :: StateT b m a -> b -> m (a, b)
-runOnT l s = runStateT l s
+runOnT :: b -> StateT b m a -> m (a, b)
+runOnT = flip runStateT
 
 {- |
 Runs a state monad action on a structure and returns the value returned from the action.
 
 Use it to fetch values from fields.
 
-> somePoint = Point 5 3
-> a = x get `evalFrom` somePoint
-> -- a == 5
-
-But is more useful for chaining fetches (and other actions)
-
 > someTriangle = Triangle (Point 5 3) (Point 0 1) (Point 10 6)
-> a = pb . x get `evalFrom` someTriangle
+> a = evalFrom someTriangle $ pb . x get
 > -- a == 0
 
+note that:
+
+> evalFrom someTriangle (pb . x get) == someTriangle `fetch` (pb . x)
+
+The advantage over 'fetch' is that it allows you to specify a different final action besides 'get' like so:
+
+> evalFrom someTriangle $ pb . x (modifyAndGet (+1))
+
+
 -}
-evalFrom :: StateT b Identity a -> b -> a
-evalFrom l s = fst $ runOn l s
+evalFrom :: b -> StateT b Identity a -> a
+evalFrom s l = fst $ runOn s l
 
 {- |
-Monad transformer version of 'evalFrom'.
+Monad transformer version of 'evalFrom'. Note that 'evalFromT' = 'flip' 'evalStateT'.
 
 -}
-evalFromT :: (Monad m) => StateT b m a -> b -> m a
-evalFromT l s = evalStateT l s
+evalFromT :: (Monad m) => b -> StateT b m a -> m a
+evalFromT = flip evalStateT
 
 {- |
 
@@ -170,25 +301,28 @@ Runs a state monad action on a structure and returns the updated structure
 Use it to update fields:
 
 > somePoint = Point 5 3
-> a = x (put 1) `execIn` somePoint
+> a = execIn somePoint $ x (put 1)
 > -- a == Point 1 3
 
-But is more useful for chaining updates (and other actions)
+note that:
 
-> someTriangle = Triangle (Point 5 3) (Point 0 1) (Point 10 6)
-> a = pb . x (put 7) `evalFrom` someTriangle
-> -- a == Triangle (Point 5 3) (Point 7 1) (Point 10 6)
+> execIn somePoint (x (put 1)) == (somePoint `update` x) 1
+
+The advantage over 'update' is that it allows you to specify a different final action besides 'put' like so:
+
+> a = execIn somePoint $ x (modifyAndGet (+1))
+> -- a = Point 6 3
 
 -}
-execIn :: StateT a Identity a1 -> a -> a
-execIn l s = snd $ runOn l s
+execIn :: a -> StateT a Identity b -> a
+execIn s l = snd $ runOn s l
 
 {- |
-Monad transformer version of 'execIn'.
+Monad transformer version of 'execIn'. Note that 'execIn' = 'flip' 'execStateT'.
 
 -}
-execInT :: (Monad m) => StateT b m a -> b -> m b
-execInT l s = execStateT l s
+execInT :: (Monad m) => b -> StateT b m a -> m b
+execInT = flip execStateT
 
 -- * Structure lenses
 {- |
@@ -267,7 +401,7 @@ to :: (Functor f) => a -> (c -> f (a -> b)) -> c -> f b
 to m f = fmap ($ m) . f
 
 {- |
-Applies 'runSTLense' to a function and a structure and returns the snd of the result.
+Applies 'runSTLense' to a function and a structure and returns the 'snd' of the result.
 See 'to' for examples of use.
 
 -}
@@ -294,4 +428,22 @@ Modifies the state in a state monad and returns the new value.
 -}
 modifyAndGet :: (MonadState s m) => (s -> s) -> m s
 modifyAndGet f = modify f >> get
+
+{- |
+An operator for assigning a value to the value referenced by a lense.
+(see the example near the end of the tutorial at the start of this module)
+
+-}
+infixl 0 $=
+($=) :: (MonadState s m) => (m () -> b) -> s -> b
+lense $= x = lense $ put x
+
+{- |
+Flipped version of '($)'.
+
+-}
+infixl 0 $%
+($%) :: a -> (a -> b) -> b
+($%) = flip ($)
+
 

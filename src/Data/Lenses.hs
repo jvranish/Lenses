@@ -2,14 +2,14 @@
 
 {- |
 This modules provides a convienient way to access and update the elements of a structure.
-It is very similar to 'Data.Accessors', a bit more generic and has fewer dependencies.
+It is very similar to "Data.Accessors", but a bit more generic and has fewer dependencies.
 I particularly like how cleanly it handles nested structures in state monads.
-'runSTLense' is also a particularly useful function.
+'runSTLense' is also a very useful function.
 
 
 A brief tutorial to get started:
 
-To create a lense, you can use fromGetSet (although usually you would just derive them using templat haskell and "Data.Lenses.Template"):
+To create a lense, you can use fromGetSet (although usually you would just derive them using templat haskell and 'deriveLenses' from "Data.Lenses.Template"):
 
 > lense = fromGetSet getField setField
 
@@ -22,14 +22,14 @@ Where r is the type of the record, and a is the type of the field, (b can be any
 > lense :: State a b -> State r b
 
 Which is not entirely accurate, but emphasises how the lense works.
-You can think of it as "pass in an action that operates on the field, and you get an action that operates on the record".
-so say we pass in get (with less general type for clarity)
+You can think of it as \"pass in an action that operates on the field, and you get an action that operates on the record\".
+So say we pass in get (with a more specific type for clarity):
 
 > get :: State a a
 >
 > lense get :: State r a
 
-we get out a state monad that we can run on our record to fetch our field
+We get out a state monad that we can run on our record to fetch our field.
 
 > fieldValue = lense get `evalState` record
 
@@ -37,13 +37,13 @@ This module has a special function 'fetch' that does this:
 
 > fieldValue = record `fetch` lense
 
-you can also pass in put to get an action that updates the field.
+You can also pass in 'put' to get back an action that updates the field.
 
 > put :: a -> State a ()
 >
 > lense (put someValue) :: State r ()
 
-we get out a state monad that we can run on our record to update our field
+Now we have a state monad that we can run on our record to update our field.
 
 > updatedRecord = lense (put someValue) `execState` record
 
@@ -51,7 +51,7 @@ This module has a special function 'update' that does this:
 
 > updatedRecord = (record `update` lense) someValue
 
-To aid in clarity and to deal with the actual types of the lenses you should use 'execIn', 'evalFrom', and 'runOn' instead of 'execState', 'evalState', and 'runState' when working with these lenses. Also note that 'execIn', 'evalFrom', and 'runOn' have their parameters fliped.
+To aid in clarity and to deal with the actual types of the lenses this module provides 'execIn', 'evalFrom', and 'runOn' to be used in place of 'execState', 'evalState', and 'runState'. Also note that 'execIn', 'evalFrom', and 'runOn' have their parameters fliped from their state counterparts. There is nothing magical about these functions, they are just a little more handy than their state counterparts.
 
 The lenses are especially convienient if you have nested structures. Lense composition is just function composition.
 
@@ -75,7 +75,7 @@ $( deriveLenses ''Triangle )
 > a_y :: (MonadState Triangle m) => StateT Float (StateT Point m) b -> m b
 > a_y = pa . y
 
-a_y is now a lense that can operate on the y coordinate of point a inside a triangle.
+a_y is now a lense that can operate on the y coordinate of point \"a\" inside a triangle.
 We can use a_y to fetch the coordinate or update it, on whatever triangle we choose.
 
 > someTriangle = Triangle (Point 5 3) (Point 0 1) (Point 10 6)
@@ -141,10 +141,13 @@ Note that 'execInT' = 'flip' 'execStateT'.
 
 Yay for monad transformers!
 
+This module has one last feature that allows you to convert a function that fetches data from a structure to a function that modifies it! For an example see the documentation for 'runSTLense'.
+
 One final note: Due to the generality of the lenses you might end up accidentally running into the monomorphism restriction.
 So if get a type error like:
-    Couldn't match expected type `SomeMonad SomeStructureType'
-           against inferred type `Control.Monad.Identity.Identity SomeStructureType'
+
+>    Couldn't match expected type `SomeMonad SomeStructureType'
+>           against inferred type `Control.Monad.Identity.Identity SomeStructureType'
 
 and nothing appears to be wrong with your code, try turning the restriction off with -XNoMonomorphismRestriction and see if it goes away.
 If it does then you probably need to add some explicit type signatures somewhere.
@@ -157,7 +160,7 @@ Also since this module is new I'm open to radical modifications if you have a go
 module Data.Lenses (
                    -- * Basic functions to create lenses and use them
                      fromGetSet, fetch, update, alter
-                   -- * More advanced functions that allow chaining fetching//updating actio
+                   -- * Lense evaluators
                    , runOn, runOnT
                    , evalFrom, evalFromT
                    , execIn, execInT
@@ -177,7 +180,6 @@ import Control.Monad.Identity hiding (sequence, mapM)
 
 import Prelude hiding (sequence, mapM)
 
--- * Basic functions to create lenses and use them
 {- |
 This function takes a "getter" and "setter" function and returns our lense.
 
@@ -246,8 +248,6 @@ alters a field in a structure using a lense and a function:
 -}
 alter :: (MonadState a m) => (m () -> StateT r Identity b) -> (a -> a) -> r -> r
 alter lense f s = execIn s $ lense (modify f)
-
--- * More advanced functions that allow chaining fetching//updating actions
 
 {- |
 Runs a state monad action on a structure and returns the value returned from the action and the updated structure.
@@ -378,8 +378,10 @@ runSTLense f x = runST $ do
 
 {- |
 A helper combinator used for applying a monad to element collected by a fetching function.
+
 For example:
 
+> everyOther :: [a] -> [a]
 > everyOther [] = []
 > everyOther (x:[]) = [x]
 > everyOther (x:y:xs) = x : everyOther xs
@@ -387,6 +389,7 @@ For example:
 > addOne :: State Int ()
 > addOne = modify (+1)
 
+> test :: [Int]
 > test = (addOne `to` everyOther) `from` [1, 2, 9, 6, 7, 8, 4]
 > -- test == [2, 2, 10, 6, 8, 8, 5]
 
@@ -404,13 +407,12 @@ to m f = fmap ($ m) . f
 
 {- |
 Applies 'runSTLense' to a function and a structure and returns the 'snd' of the result.
-See 'to' for examples of use.
+See 'to' for example of use.
 
 -}
 from :: (Traversable t) => (forall s. t (State a b -> s) -> t s) -> t a -> t a
 from f x = snd $ runSTLense f x
 
--- * Generic helper functions
 
 {- |
 Modifies the state in a state monad and returns the original value.

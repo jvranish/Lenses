@@ -152,8 +152,9 @@ So if get a type error like:
 and nothing appears to be wrong with your code, try turning the restriction off with -XNoMonomorphismRestriction and see if it goes away.
 If it does then you probably need to add some explicit type signatures somewhere.
 
-I whipped out this documentation in a hurry, so if you spot any errors, or think I should explain something better, /please/ let me know.
+I whipped out this documentation in a hurry, so if you spot any errors, or think I should explain something better, /please/ let me know. This library is hosted on github (click on the /Contents/ link above and you should see the Homepage link) so it should be very easy to forked it and send patches to me.
 Also since this module is new I'm open to radical modifications if you have a good suggestion, so suggest away! :)
+
 
 -}
 

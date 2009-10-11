@@ -411,7 +411,7 @@ Applies 'runSTLense' to a function and a structure and returns the 'snd' of the 
 See 'to' for example of use.
 
 -}
-from :: (Traversable t) => (forall s. t (State a b -> s) -> t s) -> t a -> t a
+from :: (Traversable t, Traversable f) => (forall s. t (State a b -> s) -> f s) -> t a -> t a
 from f x = snd $ runSTLense f x
 
 

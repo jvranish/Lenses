@@ -2,7 +2,7 @@
 
 {- |
 This modules provides a convienient way to access and update the elements of a structure.
-It is very similar to "Data.Accessors", but a bit more generic and has fewer dependencies.
+It is very similar to Data.Accessors, but a bit more generic and has fewer dependencies.
 I particularly like how cleanly it handles nested structures in state monads.
 'runSTLense' is also a very useful function.
 

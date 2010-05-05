@@ -77,7 +77,16 @@ updatdeTriangle6 = execInT someTriangle $ do
   cy <- c_y get
   when (cy == 0) $ throwError "Something bad happend"
   a_x $ put cy
--- updatedTriangle == Right $ Triangle (Point 6 3) (Point 0 1) (Point 10 6)
--- if cy had equaled 0 then we would have gotten this:
--- updatedTriangle == Left "Something bad happend"
+
+everyOther :: [a] -> [a]
+everyOther [] = []
+everyOther (x:[]) = [x]
+everyOther (x:y:xs) = x : everyOther xs
+
+addOne :: State Int ()
+addOne = modify (+1)
+
+test :: [Int]
+test = (addOne `to` everyOther) `from` [1, 2, 9, 6, 7, 8, 4]
+-- test == [2, 2, 10, 6, 8, 8, 5]
 

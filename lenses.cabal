@@ -1,5 +1,5 @@
 Name:                lenses
-Version:             0.1.4
+Version:             0.1.5
 Author:              Job Vranish
 Maintainer:          jvranish@gmail.com
 Homepage:            http://github.com/jvranish/Lenses/tree/master
@@ -26,7 +26,7 @@ library
     If impl(ghc)
       If impl(ghc >= 6.12)
         Hs-Source-Dirs: src-24
-        Build-Depends:  template-haskell >=2.4 && <2.6
+        Build-Depends:  template-haskell >=2.4 && <2.8
       Else
         Hs-Source-Dirs: src-23
         Build-Depends:  template-haskell >=2.2 && <2.4

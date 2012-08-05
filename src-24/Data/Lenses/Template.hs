@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell, CPP #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 {- |
 This module provides an automatic Template Haskell
@@ -121,9 +121,6 @@ nameDeriveLenses t namer = do
             Nothing -> return Nothing
             Just n -> liftM Just $ makeAcc name params ftype n
 
-    -- haddock doesn't grok TH
-#ifndef __HADDOCK__
-
     makeAcc ::Name -> [TyVarBndr] -> Type -> Name -> Q [Dec]
     makeAcc name params ftype accName = do
         let params' = map (\x -> case x of (PlainTV n) -> n; (KindedTV n _) -> n) params
@@ -134,14 +131,6 @@ nameDeriveLenses t namer = do
                     ( \x s ->
                         $( return $ RecUpdE (VarE 's) [(name, VarE 'x)] ) )
                 |]
-
-        --return
-        --  [ SigD accName (ForallT (map PlainTV params')
-        --       [] (AppT (AppT (ConT ''Accessor.T) appliedT) ftype))
-        --  , ValD (VarP accName) (NormalB body) []
-        --  ]
-        -- AppT (AppT (ConT ''MonadState) appliedT) (VarT m)
-        
         return
           [ SigD accName (ForallT (map PlainTV (b:m:params')) [ClassP ''MonadState [appliedT, VarT m]] (AppT (AppT ArrowT (AppT (AppT (AppT (ConT ''StateT) ftype) (VarT m)) (VarT b))) (AppT (VarT m) (VarT b))))
           , ValD (VarP accName) (NormalB body) []
@@ -150,5 +139,4 @@ nameDeriveLenses t namer = do
         b = mkName "b"
         m = mkName "m"
 
-#endif
 
